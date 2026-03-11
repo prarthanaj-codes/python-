@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EcoSim — Ecosystem Simulator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #090e0b;
+      --surface:   #101810;
+      --border:    #1b2e20;
+      --plant:     #2dcc6f;
+      --plant-glow:#4fffaa;
+      --rabbit:    #f0c040;
+      --rabbit-glow:#ffd966;
+      --fox:       #e84040;
+      --fox-glow:  #ff7070;
+      --empty:     #0c1410;
+      --text:      #c8e6c9;
+      --muted:     #4a7a55;
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    body::before {
+      content:'';
+      position:fixed; inset:0;
+      background:
+        radial-gradient(ellipse 70% 50% at 15% 25%, rgba(45,204,111,0.05) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 85% 75%, rgba(232,64,64,0.04) 0%, transparent 60%);
+      pointer-events:none; z-index:0;
+    }
+
+    /* ── HEADER ── */
+    header {
+      width:100%; padding:22px 40px 14px;
+      display:flex; align-items:baseline; gap:14px;
+      border-bottom:1px solid var(--border);
+      position:relative; z-index:1;
+    }
+    header h1 {
+      font-family:'Playfair Display',serif;
+      font-size:1.9rem; color:var(--plant-glow);
+      text-shadow:0 0 30px rgba(79,255,170,0.35);
+    }
+    header span { font-size:0.65rem; color:var(--muted); letter-spacing:3px; text-transform:uppercase; }
+
+    /* ── LAYOUT ── */
+    .main {
+      display:grid;
+      grid-template-columns: 1fr 250px;
+      gap:20px;
+      padding:20px 28px;
+      width:100%; max-width:1080px;
+      position:relative; z-index:1;
+    }
+
+    /* ── GRID ── */
+    .grid-wrap { display:flex; flex-direction:column; gap:12px; }
+
+    #grid {
+      display:grid;
+      border:1px solid var(--border);
+      border-radius:4px;
+      overflow:hidden;
+      box-shadow:0 0 50px rgba(45,204,111,0.07), inset 0 0 40px rgba(0,0,0,0.5);
+      cursor:crosshair; user-select:none;
+    }
+
+    .cell {
+      width:100%; aspect-ratio:1/1;
+      transition: background 0.12s;
+      display:flex; align-items:center; justify-content:center;
+      font-size:clamp(5px, 1.1vw, 13px);
+      line-height:1;
+    }
+    .cell.empty  { background:var(--empty); }
+    .cell.plant  { background:#143d20; }
+    .cell.rabbit { background:#3a2e08; }
+    .cell.fox    { background:#3a0e0e; }
+
+    /* ── TOOLBAR ── */
+    .toolbar { display:flex; gap:8px; }
+
+    .brush-btn {
+      flex:1; padding:9px 4px;
+      border:1px solid var(--border);
+      background:var(--surface);
+      color:var(--muted);
+      font-family:'Space Mono',monospace;
+      font-size:0.62rem; letter-spacing:1px; text-transform:uppercase;
+      cursor:pointer; border-radius:3px;
+      transition:all 0.2s;
+      display:flex; flex-direction:column; align-items:center; gap:4px;
+    }
+    .brush-btn .icon { font-size:1.1rem; }
+    .brush-btn:hover { border-color:var(--plant); color:var(--text); }
+    .brush-btn.active[data-type="plant"]  { border-color:var(--plant-glow); color:var(--plant-glow); background:rgba(45,204,111,0.10); box-shadow:0 0 12px rgba(79,255,170,0.2); }
+    .brush-btn.active[data-type="rabbit"] { border-color:var(--rabbit-glow); color:var(--rabbit-glow); background:rgba(240,192,64,0.10); }
+    .brush-btn.active[data-type="fox"]    { border-color:var(--fox-glow);    color:var(--fox-glow);    background:rgba(232,64,64,0.10); }
+    .brush-btn.active[data-type="0"]      { border-color:#555; color:#aaa; background:#151515; }
+
+    /* ── SIDEBAR ── */
+    .sidebar { display:flex; flex-direction:column; gap:16px; }
+
+    .panel {
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:4px;
+      padding:14px;
+    }
+    .panel-title {
+      font-size:0.58rem; letter-spacing:3px; text-transform:uppercase;
+      color:var(--muted); margin-bottom:12px;
+      padding-bottom:8px; border-bottom:1px solid var(--border);
+    }
+
+    /* Tick */
+    .tick-display {
+      text-align:center; padding:10px;
+      border:1px solid var(--border); border-radius:3px; background:var(--surface);
+    }
+    .tick-label { font-size:0.55rem; letter-spacing:3px; text-transform:uppercase; color:var(--muted); }
+    .tick-num   { font-size:1.5rem; font-weight:700; color:var(--plant-glow); line-height:1.3; }
+
+    /* Stats */
+    .stat-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+    .stat-label { display:flex; align-items:center; gap:6px; font-size:0.68rem; color:var(--muted); }
+    .stat-dot { width:8px; height:8px; border-radius:50%; }
+    .stat-val { font-size:1rem; font-weight:700; }
+    .stat-bar-wrap { height:3px; background:var(--border); border-radius:2px; margin-bottom:10px; overflow:hidden; }
+    .stat-bar { height:100%; border-radius:2px; transition:width 0.4s ease; min-width:2px; }
+
+    /* Chart */
+    #popChart { width:100% !important; height:90px !important; display:block; }
+
+    /* Controls */
+    .ctrl-btn {
+      width:100%; padding:9px;
+      margin-bottom:7px;
+      border:1px solid var(--border);
+      background:transparent; color:var(--text);
+      font-family:'Space Mono',monospace;
+      font-size:0.68rem; letter-spacing:2px; text-transform:uppercase;
+      cursor:pointer; border-radius:3px; transition:all 0.2s;
+    }
+    .ctrl-btn:last-of-type { margin-bottom:0; }
+    #btnPlay  { border-color:var(--plant); color:var(--plant-glow); }
+    #btnPlay:hover, #btnPlay.running { background:rgba(45,204,111,0.1); box-shadow:0 0 18px rgba(79,255,170,0.2); }
+    #btnPlay.running { color:var(--fox-glow); border-color:var(--fox); }
+    #btnReset:hover  { border-color:var(--fox); color:var(--fox-glow); }
+    #btnRandom:hover { border-color:var(--rabbit); color:var(--rabbit-glow); }
+
+    .speed-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
+    .speed-row label { font-size:0.58rem; color:var(--muted); letter-spacing:2px; text-transform:uppercase; white-space:nowrap; }
+    input[type=range] { flex:1; accent-color:var(--plant); cursor:pointer; }
+    .speed-val { font-size:0.62rem; min-width:24px; text-align:right; }
+
+    /* Legend */
+    .legend-item { display:flex; align-items:flex-start; gap:8px; font-size:0.62rem; margin-bottom:7px; }
+    .legend-icon { font-size:1rem; line-height:1; }
+    .legend-desc { color:var(--muted); line-height:1.5; }
+    .legend-desc strong { color:var(--text); }
+
+    /* Running pulse */
+    @keyframes gridPulse {
+      0%,100% { box-shadow:0 0 50px rgba(45,204,111,0.07); }
+      50%      { box-shadow:0 0 70px rgba(45,204,111,0.18); }
+    }
+    #grid.running { animation:gridPulse 2s infinite; }
+
+    /* Banner */
+    #banner {
+      display:none; position:fixed;
+      top:50%; left:50%; transform:translate(-50%,-50%);
+      background:var(--surface); border:1px solid var(--fox);
+      padding:28px 44px; border-radius:6px; text-align:center;
+      z-index:100; box-shadow:0 0 60px rgba(232,64,64,0.3);
+    }
+    #banner h2 { font-family:'Playfair Display',serif; color:var(--fox-glow); margin-bottom:8px; font-size:1.4rem; }
+    #banner p  { font-size:0.68rem; color:var(--muted); margin-bottom:16px; }
+    #banner button {
+      padding:8px 28px; background:transparent;
+      border:1px solid var(--fox); color:var(--fox-glow);
+      font-family:'Space Mono',monospace; font-size:0.65rem;
+      letter-spacing:2px; text-transform:uppercase;
+      cursor:pointer; border-radius:3px;
+    }
+
+    @media(max-width:720px){
+      .main { grid-template-columns:1fr; padding:12px; }
+      header { padding:14px 16px 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>EcoSim</h1>
+  <span>Living Ecosystem Simulator</span>
+</header>
+
+<div class="main">
+  <!-- LEFT: Grid + Brush -->
+  <div class="grid-wrap">
+    <div id="grid"></div>
+    <div class="toolbar">
+      <button class="brush-btn active" data-type="plant"><span class="icon">🌿</span>Plant</button>
+      <button class="brush-btn"        data-type="rabbit"><span class="icon">🐇</span>Rabbit</button>
+      <button class="brush-btn"        data-type="fox"><span class="icon">🦊</span>Fox</button>
+      <button class="brush-btn"        data-type="0"><span class="icon">✕</span>Erase</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: Sidebar -->
+  <div class="sidebar">
+
+    <div class="tick-display">
+      <div class="tick-label">Generation</div>
+      <div class="tick-num" id="tickNum">0</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Population</div>
+      <div class="stat-row">
+        <div class="stat-label"><span class="stat-dot" style="background:var(--plant)"></span>Plants</div>
+        <div class="stat-val" id="cntPlant" style="color:var(--plant-glow)">0</div>
+      </div>
+      <div class="stat-bar-wrap"><div class="stat-bar" id="barPlant" style="background:var(--plant);width:0%"></div></div>
+
+      <div class="stat-row">
+        <div class="stat-label"><span class="stat-dot" style="background:var(--rabbit)"></span>Rabbits</div>
+        <div class="stat-val" id="cntRabbit" style="color:var(--rabbit-glow)">0</div>
+      </div>
+      <div class="stat-bar-wrap"><div class="stat-bar" id="barRabbit" style="background:var(--rabbit);width:0%"></div></div>
+
+      <div class="stat-row">
+        <div class="stat-label"><span class="stat-dot" style="background:var(--fox)"></span>Foxes</div>
+        <div class="stat-val" id="cntFox" style="color:var(--fox-glow)">0</div>
+      </div>
+      <div class="stat-bar-wrap"><div class="stat-bar" id="barFox" style="background:var(--fox);width:0%"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Population History</div>
+      <canvas id="popChart"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Controls</div>
+      <button class="ctrl-btn" id="btnPlay">▶ Start Simulation</button>
+      <button class="ctrl-btn" id="btnRandom">⚡ Random Seed</button>
+      <button class="ctrl-btn" id="btnReset">↺ Reset Grid</button>
+      <div class="speed-row">
+        <label>Speed</label>
+        <input type="range" id="speedSlider" min="1" max="10" value="4">
+        <span class="speed-val" id="speedVal">4</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Ecosystem Rules</div>
+      <div class="legend-item"><span class="legend-icon">🌿</span><div class="legend-desc"><strong>Plants</strong> spread to empty neighbours each tick</div></div>
+      <div class="legend-item"><span class="legend-icon">🐇</span><div class="legend-desc"><strong>Rabbits</strong> eat plants & breed; starve without food</div></div>
+      <div class="legend-item"><span class="legend-icon">🦊</span><div class="legend-desc"><strong>Foxes</strong> hunt rabbits & breed; starve quickly alone</div></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="banner">
+  <h2>Ecosystem Collapsed</h2>
+  <p id="bannerMsg">All life has gone extinct.</p>
+  <button onclick="document.getElementById('banner').style.display='none'">Dismiss</button>
+</div>
+
+<script>
+  // ── Constants ──
+  const EMPTY=0, PLANT=1, RABBIT=2, FOX=3;
+  const EMOJIS = { [PLANT]:'🌿', [RABBIT]:'🐇', [FOX]:'🦊', [EMPTY]:'' };
+  const CELL_CLASSES = { [EMPTY]:'empty', [PLANT]:'plant', [RABBIT]:'rabbit', [FOX]:'fox' };
+
+  let cols=30, rows=22, cells=[], brush=PLANT;
+  let running=false, timer=null;
+  let chartHistory = { plant:[], rabbit:[], fox:[] };
+  let isMouseDown=false;
+
+  // ── Build Grid DOM ──
+  function buildGrid(c, r) {
+    cols=c; rows=r;
+    const grid = document.getElementById('grid');
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.innerHTML = '';
+    cells = [];
+    for(let i=0; i<rows*cols; i++){
+      const div = document.createElement('div');
+      div.className = 'cell empty';
+      div.dataset.idx = i;
+      grid.appendChild(div);
+      cells.push(div);
+    }
+    // Paint events
+    grid.addEventListener('mousedown', e=>{ isMouseDown=true; paintCell(e); });
+    grid.addEventListener('mouseover', e=>{ if(isMouseDown) paintCell(e); });
+    document.addEventListener('mouseup', ()=>isMouseDown=false);
+
+    // Touch support
+    grid.addEventListener('touchstart', e=>{ e.preventDefault(); paintCellTouch(e); }, {passive:false});
+    grid.addEventListener('touchmove',  e=>{ e.preventDefault(); paintCellTouch(e); }, {passive:false});
+  }
+
+  function paintCell(e) {
+    const cell = e.target.closest('.cell');
+    if(!cell) return;
+    const idx = parseInt(cell.dataset.idx);
+    const r = Math.floor(idx/cols), c = idx%cols;
+    fetch('/api/place', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({row:r, col:c, type:brush})
+    }).then(r=>r.json()).then(data=>{
+      renderGrid(data.grid);
+      updateStats(data.counts);
+    });
+  }
+
+  function paintCellTouch(e) {
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if(el && el.classList.contains('cell')){
+      const fakeEvent = { target: el };
+      paintCell(fakeEvent);
+    }
+  }
+
+  // ── Render ──
+  function renderGrid(grid) {
+    for(let r=0; r<rows; r++){
+      for(let c=0; c<cols; c++){
+        const idx = r*cols+c;
+        const val = grid[r][c];
+        const div = cells[idx];
+        div.className = 'cell ' + CELL_CLASSES[val];
+        div.textContent = EMOJIS[val];
+      }
+    }
+  }
+
+  function updateStats(counts) {
+    const total = counts.plant + counts.rabbit + counts.fox || 1;
+    document.getElementById('cntPlant').textContent  = counts.plant;
+    document.getElementById('cntRabbit').textContent = counts.rabbit;
+    document.getElementById('cntFox').textContent    = counts.fox;
+    document.getElementById('barPlant').style.width  = (counts.plant/total*100)+'%';
+    document.getElementById('barRabbit').style.width = (counts.rabbit/total*100)+'%';
+    document.getElementById('barFox').style.width    = (counts.fox/total*100)+'%';
+  }
+
+  function updateTick(n) {
+    document.getElementById('tickNum').textContent = n;
+  }
+
+  // ── Mini Canvas Chart ──
+  function drawChart(history) {
+    const canvas = document.getElementById('popChart');
+    const ctx = canvas.getContext('2d');
+    canvas.width  = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = 90 * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+    const W = canvas.offsetWidth, H = 90;
+    ctx.clearRect(0,0,W,H);
+
+    const all = [...history.plant, ...history.rabbit, ...history.fox];
+    const maxVal = Math.max(...all, 1);
+    const n = history.plant.length;
+    if(n < 2) return;
+
+    function drawLine(data, color){
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      data.forEach((v,i)=>{
+        const x = (i/(n-1))*W;
+        const y = H - (v/maxVal)*(H-8) - 4;
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      });
+      ctx.stroke();
+    }
+
+    drawLine(history.plant,  '#2dcc6f');
+    drawLine(history.rabbit, '#f0c040');
+    drawLine(history.fox,    '#e84040');
+  }
+
+  // ── Simulation Loop ──
+  function tick() {
+    fetch('/api/tick', { method:'POST' })
+      .then(r=>r.json())
+      .then(data=>{
+        renderGrid(data.grid);
+        updateStats(data.counts);
+        updateTick(data.tick);
+        chartHistory = data.history;
+        drawChart(chartHistory);
+
+        // Extinction check
+        const c = data.counts;
+        if(c.rabbit===0 && c.fox===0){
+          stopSim();
+          document.getElementById('bannerMsg').textContent = 'All animals have gone extinct. Plants dominate.';
+          document.getElementById('banner').style.display = 'block';
+        } else if(c.plant===0 && c.rabbit===0){
+          stopSim();
+          document.getElementById('bannerMsg').textContent = 'The food chain collapsed. Foxes starved.';
+          document.getElementById('banner').style.display = 'block';
+        }
+      });
+  }
+
+  function startSim() {
+    const speed = parseInt(document.getElementById('speedSlider').value);
+    const delay = Math.round(1200 / speed);
+    timer = setInterval(tick, delay);
+    running = true;
+    document.getElementById('btnPlay').textContent = '■ Stop Simulation';
+    document.getElementById('btnPlay').classList.add('running');
+    document.getElementById('grid').classList.add('running');
+  }
+
+  function stopSim() {
+    clearInterval(timer); timer=null;
+    running = false;
+    document.getElementById('btnPlay').textContent = '▶ Start Simulation';
+    document.getElementById('btnPlay').classList.remove('running');
+    document.getElementById('grid').classList.remove('running');
+  }
+
+  // ── Controls ──
+  document.getElementById('btnPlay').addEventListener('click', ()=>{
+    running ? stopSim() : startSim();
+  });
+
+  document.getElementById('btnReset').addEventListener('click', ()=>{
+    stopSim();
+    fetch('/api/reset', {method:'POST'})
+      .then(r=>r.json()).then(()=>{
+        fetch('/api/state').then(r=>r.json()).then(data=>{
+          renderGrid(data.grid);
+          updateStats(data.counts);
+          updateTick(0);
+          chartHistory = {plant:[],rabbit:[],fox:[]};
+          drawChart(chartHistory);
+        });
+      });
+  });
+
+  document.getElementById('btnRandom').addEventListener('click', ()=>{
+    stopSim();
+    fetch('/api/random', {method:'POST'})
+      .then(r=>r.json()).then(data=>{
+        renderGrid(data.grid);
+        updateStats(data.counts);
+        updateTick(0);
+        chartHistory = data.history;
+        drawChart(chartHistory);
+      });
+  });
+
+  document.getElementById('speedSlider').addEventListener('input', function(){
+    document.getElementById('speedVal').textContent = this.value;
+    if(running){ stopSim(); startSim(); }
+  });
+
+  // Brush buttons
+  document.querySelectorAll('.brush-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.brush-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      brush = parseInt(btn.dataset.type) || btn.dataset.type;
+      if(btn.dataset.type==='plant')  brush=PLANT;
+      else if(btn.dataset.type==='rabbit') brush=RABBIT;
+      else if(btn.dataset.type==='fox')    brush=FOX;
+      else brush=EMPTY;
+    });
+  });
+
+  // ── Init ──
+  fetch('/api/state').then(r=>r.json()).then(data=>{
+    buildGrid(data.cols, data.rows);
+    renderGrid(data.grid);
+    updateStats(data.counts);
+    updateTick(data.tick);
+  });
+
+  window.addEventListener('resize', ()=>drawChart(chartHistory));
+</script>
+</body>
+</html>
