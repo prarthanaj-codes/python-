@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>EcoSim — Ecosystem Survival Game</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#090e0b; --surface:#101810; --border:#1b2e20;
+      --plant:#2dcc6f; --plant-glow:#4fffaa;
+      --rabbit:#f0c040; --rabbit-glow:#ffd966;
+      --fox:#e84040; --fox-glow:#ff7070;
+      --empty:#0c1410; --text:#c8e6c9; --muted:#4a7a55;
+      --gold:#ffd700; --gold-glow:#ffe566;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;}
+    body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 70% 50% at 15% 25%,rgba(45,204,111,0.05) 0%,transparent 60%),radial-gradient(ellipse 50% 40% at 85% 75%,rgba(232,64,64,0.04) 0%,transparent 60%);pointer-events:none;z-index:0;}
+
+    header{width:100%;padding:16px 32px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);position:relative;z-index:1;}
+    .header-left{display:flex;align-items:baseline;gap:12px;}
+    header h1{font-family:'Playfair Display',serif;font-size:1.7rem;color:var(--plant-glow);text-shadow:0 0 30px rgba(79,255,170,0.35);}
+    header span{font-size:0.6rem;color:var(--muted);letter-spacing:3px;text-transform:uppercase;}
+    .header-right{display:flex;gap:16px;align-items:center;}
+    .score-box{text-align:center;}
+    .score-label{font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
+    .score-val{font-size:1.2rem;font-weight:700;color:var(--gold-glow);}
+
+    .main{display:grid;grid-template-columns:1fr 260px;gap:18px;padding:16px 24px;width:100%;max-width:1100px;position:relative;z-index:1;}
+
+    /* Level bar */
+    .level-bar{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:16px;}
+    .level-badge{background:rgba(79,255,170,0.1);border:1px solid var(--plant-glow);border-radius:3px;padding:4px 10px;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--plant-glow);white-space:nowrap;}
+    .level-info{flex:1;}
+    .level-name{font-size:0.8rem;font-weight:700;color:var(--text);margin-bottom:2px;}
+    .level-desc{font-size:0.58rem;color:var(--muted);}
+    .level-progress-wrap{margin-left:auto;text-align:right;}
+    .level-progress-label{font-size:0.55rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+    .level-progress-bar-bg{width:100px;height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden;}
+    .level-progress-bar{height:100%;background:var(--plant);border-radius:2px;transition:width 0.4s;}
+
+    .grid-wrap{display:flex;flex-direction:column;gap:10px;}
+    #grid{display:grid;border:1px solid var(--border);border-radius:4px;overflow:hidden;box-shadow:0 0 50px rgba(45,204,111,0.07),inset 0 0 40px rgba(0,0,0,0.5);cursor:crosshair;user-select:none;}
+    .cell{width:100%;aspect-ratio:1/1;transition:background 0.12s;display:flex;align-items:center;justify-content:center;font-size:clamp(5px,1.1vw,13px);line-height:1;}
+    .cell.empty{background:var(--empty);}
+    .cell.plant{background:#143d20;}
+    .cell.rabbit{background:#3a2e08;}
+    .cell.fox{background:#3a0e0e;}
+
+    .toolbar{display:flex;gap:8px;}
+    .brush-btn{flex:1;padding:8px 4px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:'Space Mono',monospace;font-size:0.6rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:3px;}
+    .brush-btn .icon{font-size:1.1rem;}
+    .brush-btn:hover{border-color:var(--plant);color:var(--text);}
+    .brush-btn.active[data-type="plant"]{border-color:var(--plant-glow);color:var(--plant-glow);background:rgba(45,204,111,0.10);}
+    .brush-btn.active[data-type="rabbit"]{border-color:var(--rabbit-glow);color:var(--rabbit-glow);background:rgba(240,192,64,0.10);}
+    .brush-btn.active[data-type="fox"]{border-color:var(--fox-glow);color:var(--fox-glow);background:rgba(232,64,64,0.10);}
+    .brush-btn.active[data-type="0"]{border-color:#555;color:#aaa;background:#151515;}
+    .intervention-note{font-size:0.55rem;color:var(--muted);text-align:center;margin-top:2px;}
+
+    .sidebar{display:flex;flex-direction:column;gap:14px;}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:14px;}
+    .panel-title{font-size:0.55rem;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+
+    .tick-display{text-align:center;padding:10px;border:1px solid var(--border);border-radius:3px;background:var(--surface);}
+    .tick-label{font-size:0.52rem;letter-spacing:3px;text-transform:uppercase;color:var(--muted);}
+    .tick-num{font-size:1.4rem;font-weight:700;color:var(--plant-glow);line-height:1.3;}
+    .tick-target{font-size:0.55rem;color:var(--muted);}
+
+    .scores-row{display:flex;gap:8px;margin-bottom:4px;}
+    .score-card{flex:1;background:rgba(255,215,0,0.06);border:1px solid rgba(255,215,0,0.2);border-radius:3px;padding:8px;text-align:center;}
+    .sc-label{font-size:0.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);}
+    .sc-val{font-size:0.95rem;font-weight:700;color:var(--gold-glow);}
+
+    .stat-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
+    .stat-label{display:flex;align-items:center;gap:6px;font-size:0.65rem;color:var(--muted);}
+    .stat-dot{width:7px;height:7px;border-radius:50%;}
+    .stat-val{font-size:0.95rem;font-weight:700;}
+    .stat-bar-wrap{height:3px;background:var(--border);border-radius:2px;margin-bottom:9px;overflow:hidden;}
+    .stat-bar{height:100%;border-radius:2px;transition:width 0.4s ease;min-width:2px;}
+
+    canvas#popChart{width:100%!important;height:80px!important;display:block;}
+
+    .ctrl-btn{width:100%;padding:9px;margin-bottom:7px;border:1px solid var(--border);background:transparent;color:var(--text);font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all 0.2s;}
+    .ctrl-btn:last-of-type{margin-bottom:0;}
+    #btnPlay{border-color:var(--plant);color:var(--plant-glow);}
+    #btnPlay:hover,#btnPlay.running{background:rgba(45,204,111,0.1);}
+    #btnPlay.running{color:var(--fox-glow);border-color:var(--fox);}
+    #btnReset:hover{border-color:var(--fox);color:var(--fox-glow);}
+
+    .level-select-btns{display:flex;flex-wrap:wrap;gap:5px;}
+    .lvl-btn{flex:1;min-width:30px;padding:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Space Mono',monospace;font-size:0.6rem;cursor:pointer;border-radius:3px;transition:all 0.2s;text-align:center;}
+    .lvl-btn:hover,.lvl-btn.active{border-color:var(--plant-glow);color:var(--plant-glow);background:rgba(45,204,111,0.08);}
+
+    /* Overlays */
+    .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:50;align-items:center;justify-content:center;}
+    .overlay.show{display:flex;}
+    .modal{background:var(--surface);border-radius:6px;padding:32px 40px;text-align:center;max-width:400px;width:90%;}
+    .modal h2{font-family:'Playfair Display',serif;font-size:1.5rem;margin-bottom:8px;}
+    .modal p{font-size:0.68rem;color:var(--muted);margin-bottom:6px;line-height:1.7;}
+    .modal .big-score{font-size:2rem;font-weight:700;color:var(--gold-glow);margin:12px 0;}
+    .modal-btn{padding:10px 28px;border-radius:3px;font-family:'Space Mono',monospace;font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;cursor:pointer;margin:4px;}
+
+    #modalLevelComplete .modal{border:1px solid var(--plant);}
+    #modalLevelComplete h2{color:var(--plant-glow);}
+    .btn-next{background:rgba(45,204,111,0.15);border:1px solid var(--plant-glow);color:var(--plant-glow);}
+
+    #modalGameOver .modal{border:1px solid var(--fox);}
+    #modalGameOver h2{color:var(--fox-glow);}
+    .btn-retry{background:rgba(232,64,64,0.15);border:1px solid var(--fox-glow);color:var(--fox-glow);}
+
+    @keyframes gridPulse{0%,100%{box-shadow:0 0 50px rgba(45,204,111,0.07);}50%{box-shadow:0 0 70px rgba(45,204,111,0.18);}}
+    #grid.running{animation:gridPulse 2s infinite;}
+
+    @media(max-width:720px){.main{grid-template-columns:1fr;padding:10px;}header{padding:12px 14px 10px;}}
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>EcoSim</h1>
+    <span>Ecosystem Survival Game</span>
+  </div>
+  <div class="header-right">
+    <div class="score-box">
+      <div class="score-label">Score</div>
+      <div class="score-val" id="headerScore">0</div>
+    </div>
+    <div class="score-box">
+      <div class="score-label">Best</div>
+      <div class="score-val" id="headerHigh" style="color:var(--gold)">0</div>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="grid-wrap">
+    <!-- Level bar -->
+    <div class="level-bar">
+      <div class="level-badge" id="levelBadge">LVL 1</div>
+      <div class="level-info">
+        <div class="level-name" id="levelName">The Beginning</div>
+        <div class="level-desc" id="levelDesc">Keep rabbits AND foxes alive for 30 ticks!</div>
+      </div>
+      <div class="level-progress-wrap">
+        <div class="level-progress-label">Progress</div>
+        <div class="level-progress-bar-bg">
+          <div class="level-progress-bar" id="levelProgressBar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="grid"></div>
+
+    <div class="toolbar">
+      <button class="brush-btn active" data-type="plant"><span class="icon">🌿</span>Plant</button>
+      <button class="brush-btn" data-type="rabbit"><span class="icon">🐇</span>Rabbit</button>
+      <button class="brush-btn" data-type="fox"><span class="icon">🦊</span>Fox</button>
+      <button class="brush-btn" data-type="0"><span class="icon">✕</span>Erase</button>
+    </div>
+    <div class="intervention-note" id="interventionNote">🎯 Interventions left: <strong id="intLeft">3</strong> (place animals mid-game costs 1)</div>
+  </div>
+
+  <div class="sidebar">
+
+    <div class="tick-display">
+      <div class="tick-label">Tick</div>
+      <div class="tick-num" id="tickNum">0</div>
+      <div class="tick-target" id="tickTarget">/ 30 target</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Scores</div>
+      <div class="scores-row">
+        <div class="score-card">
+          <div class="sc-label">Score</div>
+          <div class="sc-val" id="scoreVal">0</div>
+        </div>
+        <div class="score-card">
+          <div class="sc-label">High Score</div>
+          <div class="sc-val" id="highScore">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Population</div>
+      <div class="stat-row">
+        <div class="stat-label"><span class="stat-dot" style="background:var(--plant)"></span>Plants</div>
+        <div class="stat-val" id="cntPlant" style="color:var(--plant-glow)">0</div>
+      </div>
+      <div class="stat-bar-wrap"><div class="stat-bar" id="barPlant" style="background:var(--plant);width:0%"></div></div>
+      <div class="stat-row">
+        <div class="stat-label"><span class="stat-dot" style="background:var(--rabbit)"></span>Rabbits</div>
+        <div class="stat-val" id="cntRabbit" style="color:var(--rabbit-glow)">0</div>
+      </div>
+      <div class="stat-bar-wrap"><div class="stat-bar" id="barRabbit" style="background:var(--rabbit);width:0%"></div></div>
+      <div class="stat-row">
+        <div class="stat-label"><span class="stat-dot" style="background:var(--fox)"></span>Foxes</div>
+        <div class="stat-val" id="cntFox" style="color:var(--fox-glow)">0</div>
+      </div>
+      <div class="stat-bar-wrap"><div class="stat-bar" id="barFox" style="background:var(--fox);width:0%"></div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Population History</div>
+      <canvas id="popChart"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Controls</div>
+      <button class="ctrl-btn" id="btnPlay">&#9654; Start</button>
+      <button class="ctrl-btn" id="btnReset">&#8635; Restart Level</button>
+      <div style="margin-top:8px;">
+        <div class="panel-title" style="margin-bottom:6px;">Select Level</div>
+        <div class="level-select-btns" id="levelBtns"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Level Complete Modal -->
+<div class="overlay" id="modalLevelComplete">
+  <div class="modal">
+    <h2>Level Complete! &#127881;</h2>
+    <p id="lcDesc"></p>
+    <div class="big-score" id="lcScore">0</div>
+    <p style="color:var(--muted);font-size:0.6rem;">Score earned this level</p>
+    <br>
+    <button class="modal-btn btn-next" id="btnNextLevel">Next Level &#8594;</button>
+    <button class="modal-btn" style="border:1px solid var(--border);color:var(--muted);background:transparent;" onclick="closeModals()">Keep Watching</button>
+  </div>
+</div>
+
+<!-- Game Over Modal -->
+<div class="overlay" id="modalGameOver">
+  <div class="modal">
+    <h2>Ecosystem Collapsed</h2>
+    <p id="goDesc"></p>
+    <div class="big-score" id="goScore" style="color:var(--fox-glow)">0</div>
+    <p style="color:var(--muted);font-size:0.6rem;">Final score</p>
+    <br>
+    <button class="modal-btn btn-retry" id="btnRetry">&#8635; Try Again</button>
+    <button class="modal-btn" style="border:1px solid var(--border);color:var(--muted);background:transparent;" onclick="closeModals()">Dismiss</button>
+  </div>
+</div>
+
+<script>
+  const EMPTY=0,PLANT=1,RABBIT=2,FOX=3;
+  const EMOJIS={[PLANT]:'&#127807;',[RABBIT]:'&#128007;',[FOX]:'&#129418;',[EMPTY]:''};
+  const CCLS={[EMPTY]:'empty',[PLANT]:'plant',[RABBIT]:'rabbit',[FOX]:'fox'};
+
+  let cols=30,rows=22,cells=[],brush=PLANT;
+  let running=false,timer=null,isMouseDown=false;
+  let chartHistory={plant:[],rabbit:[],fox:[]};
+  let currentLevelInfo={target_ticks:30};
+
+  function buildGrid(c,r){
+    cols=c;rows=r;
+    const grid=document.getElementById('grid');
+    grid.style.gridTemplateColumns=`repeat(${cols},1fr)`;
+    grid.innerHTML='';cells=[];
+    for(let i=0;i<rows*cols;i++){
+      const div=document.createElement('div');
+      div.className='cell empty';div.dataset.idx=i;
+      grid.appendChild(div);cells.push(div);
+    }
+    grid.addEventListener('mousedown',e=>{isMouseDown=true;paintCell(e);});
+    grid.addEventListener('mouseover',e=>{if(isMouseDown)paintCell(e);});
+    document.addEventListener('mouseup',()=>isMouseDown=false);
+    grid.addEventListener('touchstart',e=>{e.preventDefault();paintCellTouch(e);},{passive:false});
+    grid.addEventListener('touchmove',e=>{e.preventDefault();paintCellTouch(e);},{passive:false});
+  }
+
+  function paintCell(e){
+    const cell=e.target.closest('.cell');if(!cell)return;
+    const idx=parseInt(cell.dataset.idx);
+    const r=Math.floor(idx/cols),c=idx%cols;
+    fetch('/api/place',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({row:r,col:c,type:brush})})
+      .then(r=>r.json()).then(data=>{
+        if(data.error){alert(data.error);return;}
+        renderGrid(data.grid);updateStats(data.counts);
+        document.getElementById('intLeft').textContent=data.interventions_left;
+      });
+  }
+
+  function paintCellTouch(e){
+    const t=e.touches[0];
+    const el=document.elementFromPoint(t.clientX,t.clientY);
+    if(el&&el.classList.contains('cell'))paintCell({target:el});
+  }
+
+  function renderGrid(grid){
+    for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+      const idx=r*cols+c,val=grid[r][c],div=cells[idx];
+      div.className='cell '+CCLS[val];
+      div.innerHTML=EMOJIS[val]||'';
+    }
+  }
+
+  function updateStats(counts){
+    const total=counts.plant+counts.rabbit+counts.fox||1;
+    document.getElementById('cntPlant').textContent=counts.plant;
+    document.getElementById('cntRabbit').textContent=counts.rabbit;
+    document.getElementById('cntFox').textContent=counts.fox;
+    document.getElementById('barPlant').style.width=(counts.plant/total*100)+'%';
+    document.getElementById('barRabbit').style.width=(counts.rabbit/total*100)+'%';
+    document.getElementById('barFox').style.width=(counts.fox/total*100)+'%';
+  }
+
+  function updateHUD(data){
+    document.getElementById('tickNum').textContent=data.tick;
+    document.getElementById('tickTarget').textContent='/ '+data.level_info.target_ticks+' target';
+    document.getElementById('scoreVal').textContent=data.score;
+    document.getElementById('highScore').textContent=data.high_score;
+    document.getElementById('headerScore').textContent=data.score;
+    document.getElementById('headerHigh').textContent=data.high_score;
+    document.getElementById('intLeft').textContent=data.interventions_left;
+    document.getElementById('levelBadge').textContent='LVL '+data.level;
+    document.getElementById('levelName').textContent=data.level_info.name;
+    document.getElementById('levelDesc').textContent=data.level_info.description;
+    const pct=Math.min(data.tick/data.level_info.target_ticks*100,100);
+    document.getElementById('levelProgressBar').style.width=pct+'%';
+    currentLevelInfo=data.level_info;
+    // highlight active level btn
+    document.querySelectorAll('.lvl-btn').forEach(b=>{
+      b.classList.toggle('active',parseInt(b.dataset.lvl)===data.level);
+    });
+  }
+
+  function drawChart(history){
+    const canvas=document.getElementById('popChart');
+    const ctx=canvas.getContext('2d');
+    canvas.width=canvas.offsetWidth*window.devicePixelRatio;
+    canvas.height=80*window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio,window.devicePixelRatio);
+    const W=canvas.offsetWidth,H=80;
+    ctx.clearRect(0,0,W,H);
+    const all=[...history.plant,...history.rabbit,...history.fox];
+    const maxVal=Math.max(...all,1);
+    const n=history.plant.length;
+    if(n<2)return;
+    function drawLine(data,color){
+      ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1.5;
+      data.forEach((v,i)=>{
+        const x=(i/(n-1))*W,y=H-(v/maxVal)*(H-8)-4;
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      });ctx.stroke();
+    }
+    drawLine(history.plant,'#2dcc6f');
+    drawLine(history.rabbit,'#f0c040');
+    drawLine(history.fox,'#e84040');
+  }
+
+  function applyData(data){
+    renderGrid(data.grid);
+    updateStats(data.counts);
+    updateHUD(data);
+    if(data.history)chartHistory=data.history;
+    drawChart(chartHistory);
+  }
+
+  function tick(){
+    fetch('/api/tick',{method:'POST'}).then(r=>r.json()).then(data=>{
+      applyData(data);
+      if(data.level_complete){
+        stopSim();
+        document.getElementById('lcDesc').textContent='You completed: '+data.level_info.name;
+        document.getElementById('lcScore').textContent=data.score;
+        document.getElementById('modalLevelComplete').classList.add('show');
+      } else if(data.game_over){
+        stopSim();
+        const c=data.counts;
+        let reason='The ecosystem collapsed!';
+        if(c.rabbit===0) reason='All rabbits went extinct!';
+        else if(c.fox===0) reason='All foxes starved to death!';
+        else if(c.plant===0) reason='All plants were consumed!';
+        document.getElementById('goDesc').textContent=reason;
+        document.getElementById('goScore').textContent=data.score;
+        document.getElementById('modalGameOver').classList.add('show');
+      }
+    });
+  }
+
+  function startSim(){
+    timer=setInterval(tick,400);running=true;
+    document.getElementById('btnPlay').textContent='■ Stop';
+    document.getElementById('btnPlay').classList.add('running');
+    document.getElementById('grid').classList.add('running');
+  }
+
+  function stopSim(){
+    clearInterval(timer);timer=null;running=false;
+    document.getElementById('btnPlay').textContent='▶ Start';
+    document.getElementById('btnPlay').classList.remove('running');
+    document.getElementById('grid').classList.remove('running');
+  }
+
+  function closeModals(){
+    document.getElementById('modalLevelComplete').classList.remove('show');
+    document.getElementById('modalGameOver').classList.remove('show');
+  }
+
+  document.getElementById('btnPlay').addEventListener('click',()=>running?stopSim():startSim());
+
+  document.getElementById('btnReset').addEventListener('click',()=>{
+    stopSim();closeModals();
+    fetch('/api/start_level',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({level:parseInt(document.getElementById('levelBadge').textContent.replace('LVL ',''))})})
+      .then(r=>r.json()).then(applyData);
+  });
+
+  document.getElementById('btnNextLevel').addEventListener('click',()=>{
+    closeModals();stopSim();
+    fetch('/api/next_level',{method:'POST'}).then(r=>r.json()).then(applyData);
+  });
+
+  document.getElementById('btnRetry').addEventListener('click',()=>{
+    closeModals();stopSim();
+    fetch('/api/start_level',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({level:parseInt(document.getElementById('levelBadge').textContent.replace('LVL ',''))})})
+      .then(r=>r.json()).then(applyData);
+  });
+
+  document.querySelectorAll('.brush-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.brush-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const t=btn.dataset.type;
+      if(t==='plant') brush=PLANT;
+      else if(t==='rabbit') brush=RABBIT;
+      else if(t==='fox') brush=FOX;
+      else brush=EMPTY;
+    });
+  });
+
+  // Build level buttons
+  function buildLevelBtns(count){
+    const wrap=document.getElementById('levelBtns');wrap.innerHTML='';
+    for(let i=1;i<=count;i++){
+      const b=document.createElement('button');
+      b.className='lvl-btn';b.dataset.lvl=i;b.textContent=i;
+      b.addEventListener('click',()=>{
+        stopSim();closeModals();
+        fetch('/api/start_level',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({level:i})}).then(r=>r.json()).then(applyData);
+      });
+      wrap.appendChild(b);
+    }
+  }
+
+  // Init
+  fetch('/api/state').then(r=>r.json()).then(data=>{
+    buildGrid(data.cols,data.rows);
+    buildLevelBtns(5);
+    applyData(data);
+    // Auto seed level 1
+    fetch('/api/start_level',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({level:1})}).then(r=>r.json()).then(applyData);
+  });
+
+  window.addEventListener('resize',()=>drawChart(chartHistory));
+</script>
+</body>
+</html>
